@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="hi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b14"><title>Case Battery</title>
+<style>
+:root{--ac:#30d158;--dim:rgba(255,255,255,.6)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:#05050a}
+body{margin:0;min-height:100vh;font-family:system-ui,Roboto,sans-serif;color:#fff;text-align:center;background:linear-gradient(#0b0b14,#1b1b2e,#05050a) fixed;padding:calc(22px + env(safe-area-inset-top)) 22px calc(22px + env(safe-area-inset-bottom));-webkit-user-select:none;user-select:none}
+h1{font-size:32px;margin:0}h2{font-size:20px;margin:0 0 10px}h3{font-size:20px;margin:0 0 12px}
+p{margin:0}.dim{color:var(--dim)}.s{font-size:12px;margin-top:8px}
+.card{margin:16px 0;padding:22px;border-radius:28px;background:linear-gradient(135deg,rgba(255,255,255,.2),rgba(255,255,255,.05));transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.pill{display:inline-block;margin:4px;padding:10px 16px;border:0;border-radius:50px;background:rgba(255,255,255,.15);color:#fff;font:500 14px system-ui,Roboto,sans-serif}
+.pill.on{background:var(--ac);color:#000}
+.bn{margin-bottom:6px;padding:12px;border-radius:16px;font-size:13px}
+.ac{color:var(--ac);font-size:13px;font-weight:700}
+.t{font-size:15px;margin:2px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ear{margin-top:14px}
+input[type=range]{width:100%;accent-color:var(--ac)}
+input[type=text]{width:68%;padding:10px;border:0;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;-webkit-user-select:text;user-select:text}
+.dot{display:inline-block;width:34px;height:34px;margin:0 7px;border-radius:50%}
+svg{display:block;margin:0 auto}
+</style></head><body>
+<h1>Case Battery</h1><p class="dim">Battery + Dual Ear Player</p>
+<div id="dev"></div>
+<section class="card" id="ply"></section>
+<section class="card" id="voc"></section>
+<section class="card" id="slp"></section>
+<section class="card"><h2>Theme</h2><div id="th"></div></section>
+<section class="card" id="lg"></section>
+<input type="file" id="f" accept="audio/*" hidden>
+<script>
+const $=i=>document.getElementById(i),esc=s=>String(s).replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';');
+const pill=(t,on,fn)=>`<button class="pill${on?' on':''}" onclick="${fn}">${t}</button>`;
+const bn=(t,c)=>`<div class="bn" style="background:rgba(${c},.25)">${t}</div>`;
+const BT=!!navigator.bluetooth,SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+let names={},lv={},hist={},seen={},alerted=new Set(),logs=[],tog=false,swp=false,sleepAt=0,listening=false,heard='',pf=0;
+const vib=n=>{try{navigator.vibrate&&navigator.vibrate(n)}catch(e){}};
+
+/* ---------- Dual ear player ---------- */
+class Ear{
+  constructor(){this.title='Gaana chuno';this.vol=.6;this.playing=false;this.u=null;
+    this.a=new Audio();this.a.loop=true;
+    this.pan=AC.createStereoPanner();this.g=AC.createGain();this.g.gain.value=this.vol;
+    AC.createMediaElementSource(this.a).connect(this.pan);this.pan.connect(this.g);this.g.connect(AC.destination)}
+  load(f){if(this.u)URL.revokeObjectURL(this.u);this.u=URL.createObjectURL(f);this.a.src=this.u;this.title=f.name;this.playing=false}
+  side(s){this.pan.pan.value=s;this.g.gain.value=this.vol}
+  play(){if(!this.a.src)return;AC.resume();this.playing=true;this.a.play().catch(()=>{this.playing=false;rPly()})}
+  pause(){this.a.pause();this.playing=false}
+}
+const A=new Ear(),B=new Ear(),E=[A,B];
+const sd=e=>tog?0:e===A?(swp?1:-1):(swp?-1:1);
+const re=()=>E.forEach(e=>e.side(sd(e)));
+const lab=e=>({'-1':'Left ear','1':'Right ear','0':'Dono ear'})[sd(e)];
+function rPly(){
+  const l=tog?[A]:[A,B].sort((x,y)=>sd(x)-sd(y));
+  $('ply').innerHTML=`<h2>Dual Ear Player</h2><div>${pill('Alag gaane',!tog,'setT(false)')}${pill('Ek gaana',tog,'setT(true)')}${tog?'':pill('Swap',false,'sw()')}</div>`
+  +l.map(e=>{const i=e===A?0:1;return `<div class="ear"><div class="ac">${lab(e)}</div><div class="t">${esc(e.title)}</div><div>${pill('Gaana chuno',false,`pick(${i})`)}${pill(e.playing?'Pause':'Play',e.playing,`tp(${i})`)}</div><input type="range" min="0" max="1" step="0.01" value="${e.vol}" oninput="vol(${i},this.value)"></div>`}).join('')
+  +'<div id="vw" style="margin-top:8px"></div>';warn()}
+function warn(){const w=$('vw');if(w)w.innerHTML=(A.playing&&A.vol>.85)||(!tog&&B.playing&&B.vol>.85)?bn('Volume bahut tez hai, kaano ke liye safe nahi.','255,159,10'):''}
+function setT(v){tog=v;if(v)B.pause();re();rPly()}
+function sw(){swp=!swp;re();rPly()}
+function pick(i){pf=i;$('f').click()}
+function tp(i){const e=E[i];if(e.playing)e.pause();else{re();e.play()}rPly()}
+function vol(i,v){const e=E[i];e.vol=+v;e.side(sd(e));warn()}
+$('f').onchange=()=>{const x=$('f').files[0];if(x){try{E[pf].load(x);re()}catch(e){heard='Gaana load nahi hua';rVoc()}rPly()}$('f').value=''};
+
+/* ---------- Battery ---------- */
+function setLevel(id,l){
+  lv[id]=l;const h=hist[id]||[],t=Date.now(),last=h[h.length-1];
+  if(!last||last[1]!==l||t-last[0]>6e4)hist[id]=h.concat([[t,l]]).slice(-80);
+  if(l<=20&&!alerted.has(id)){alerted.add(id);vib(400)}else if(l>25)alerted.delete(id);
+  rDev()}
+function eta(id){const h=hist[id],w='Estimate ban raha hai...';if(!h||h.length<2)return w;
+  const drop=h[0][1]-h[h.length-1][1],hrs=(h[h.length-1][0]-h[0][0])/36e5;
+  if(drop<=0||hrs<.15)return w;const left=h[h.length-1][1]/(drop/hrs);
+  return `~${Math.floor(left)}h ${Math.floor((left%1)*60)}m bacha`}
+function ring(p,id){const C=370.7,o=C*(1-(p||0)/100),st=seen[id]?o:C;seen[id]=1;
+  return `<svg width="150" height="150" viewBox="0 0 150 150"><g fill="none" stroke-width="16" stroke-linecap="round" transform="rotate(-90 75 75)"><circle cx="75" cy="75" r="59" stroke="rgba(255,255,255,.1)"/><circle class="arc" cx="75" cy="75" r="59" data-o="${o}" stroke-dasharray="${C}" style="stroke:var(--ac);stroke-dashoffset:${st};transition:stroke-dashoffset 1s"/></g><text x="75" y="87" text-anchor="middle" font-size="36" font-weight="700" fill="#fff">${p==null?'--':p+'%'}</text></svg>`}
+function spark(h){if(h.length<2)return'<svg width="100%" height="50"></svg>';
+  const t0=h[0][0],dt=Math.max(1,h[h.length-1][0]-t0);
+  const pts=h.map(([t,l])=>`${300*(t-t0)/dt},${50*(1-l/100)}`).join(' ');
+  return `<svg width="100%" height="50" viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--ac);vector-effect:non-scaling-stroke"/></svg>`}
+function rDev(){
+  const ids=Object.keys(names);let h='';
+  if(Object.values(lv).some(v=>v<=20))h+=bn('Battery 20% ya kam hai. Charge karo.','255,69,58');
+  if(!ids.length)h+=`<section class="card"><p>Koi connected Bluetooth device nahi mila.<br>Earbuds phone se connect karo.</p>${BT?pill('Earbuds jodo (BLE)',false,'ble()'):'<p class="dim s">Is browser/WebView me Bluetooth battery support nahi hai. Chrome me kholo, ya app se window.CaseBattery.setLevel(id, naam, %) bhejo.</p>'}</section>`;
+  for(const id of ids)h+=`<section class="card"><h3>${esc(names[id])}</h3>${ring(lv[id],id)}${lv[id]==null?'<div class="dim s">Is device ne battery % report nahi kiya</div>':''}<div style="margin:8px 0;font-size:14px">${eta(id)}</div>${spark(hist[id]||[])}</section>`;
+  if(BT&&ids.length)h+=pill('+ Device jodo',false,'ble()');
+  $('dev').innerHTML=h;
+  requestAnimationFrame(()=>document.querySelectorAll('.arc').forEach(c=>c.style.strokeDashoffset=c.dataset.o))}
+async function ble(){
+  try{const d=await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:['battery_service']});
+    const id=d.id;names[id]=d.name||id;rDev();
+    const ch=await(await(await d.gatt.connect()).getPrimaryService('battery_service')).getCharacteristic('battery_level');
+    const u=v=>{const p=v.getUint8(0);setLevel(id,p);log('battery_level: '+p+'%')};
+    u(await ch.readValue());await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged',e=>u(e.target.value));
+  }catch(e){log('BLE: '+e.message)}}
+window.CaseBattery={setLevel:(id,name,l)=>{names[id]=name||id;setLevel(id,+l)}};
+const log=s=>{logs.unshift(s);logs.length=Math.min(logs.length,40);rLg()};
+function rLg(){$('lg').innerHTML='<h3 style="font-size:14px">Raw data (earbuds kya bhej rahe hain)</h3>'+(logs.length?logs.slice(0,12).map(l=>`<div class="s">${esc(l)}</div>`).join(''):'<div class="s" style="opacity:.5">Abhi kuch nahi aaya</div>')}
+
+/* ---------- Voice ---------- */
+function rVoc(){$('voc').innerHTML=`<h2>Voice Control</h2>${SR?pill(listening?'Sun raha hoon...':'Bolo (Mic)',listening,'listen()'):'<div><input type="text" id="ci" placeholder="type karo ya keyboard mic dabao"><button class="pill" onclick="runCmd()">Chalao</button></div>'}<div class="dim s">${heard?'Suna: '+esc(heard):'Bolo: "left pause", "right play", "right volume up", "swap"<br>Hindi bhi chalega: "लेफ्ट रोक", "राइट चला"'}</div>`}
+function listen(){const r=new SR();r.lang='hi-IN';listening=true;rVoc();
+  r.onresult=e=>{heard=e.results[0][0].transcript;voice(heard)};
+  r.onerror=()=>{heard='Samajh nahi aaya, dobara bolo'};
+  r.onend=()=>{listening=false;rVoc()};r.start()}
+function runCmd(){heard=$('ci').value;voice(heard);rVoc()}
+function voice(t0){const t=t0.toLowerCase(),has=(...w)=>w.some(x=>t.includes(x));
+  const side=has('left','लेफ्ट','बाएं','बायां')?-1:has('right','राइट','दाएं','दायां')?1:0;
+  if(has('swap','बदल')){swp=!swp;re();rPly();return}
+  const tg=tog?[A]:side==0?[A,B]:[sd(A)==side?A:B];
+  if(has('pause','stop','रोक','बंद','पॉज'))tg.forEach(e=>e.pause());
+  else if(has('play','चला','प्ले','शुरू')){re();tg.forEach(e=>e.play())}
+  else if(has('up','louder','बढ़ा','बढा','तेज'))tg.forEach(e=>{e.vol=Math.min(1,e.vol+.15);e.side(sd(e))});
+  else if(has('down','lower','कम','धीमा','धीरे'))tg.forEach(e=>{e.vol=Math.max(0,e.vol-.15);e.side(sd(e))});
+  rPly()}
+
+/* ---------- Sleep timer ---------- */
+function rSlp(){$('slp').innerHTML=`<h2>Sleep Timer</h2><div>${[15,30,60].map(m=>pill(m+' min',false,`sl(${m})`)).join('')}${pill('Off',false,'sl(0)')}</div><div class="dim s" id="cd"></div>`;tick()}
+function sl(m){sleepAt=m?Date.now()+m*6e4:0;tick()}
+function tick(){const c=$('cd');if(!c)return;const s=Math.max(0,Math.round((sleepAt-Date.now())/1000));
+  c.textContent=sleepAt?`Band hoga: ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`:''}
+setInterval(()=>{if(sleepAt&&Date.now()>=sleepAt){A.pause();B.pause();sleepAt=0;rPly();rSlp()}else tick()},1000);
+
+/* ---------- Theme + tilt ---------- */
+$('th').innerHTML=['#30D158','#0A84FF','#FF375F','#BF5AF2','#FF9F0A'].map(c=>`<span class="dot" style="background:${c}" onclick="document.documentElement.style.setProperty('--ac','${c}')"></span>`).join('');
+let T=null,tx=0,ty=0,px=0,py=0;const cl=v=>Math.max(-12,Math.min(12,v));
+function ts(x,y,el){T=el.closest('input')?null:el.closest('.card');px=x;py=y;tx=ty=0}
+function tm(x,y){if(!T)return;ty=cl(ty+(x-px)/6);tx=cl(tx-(y-py)/6);px=x;py=y;T.style.transform=`perspective(800px) rotateX(${tx}deg) rotateY(${ty}deg)`}
+function te(){if(T)T.style.transform='';T=null}
+const P={passive:true};
+document.addEventListener('touchstart',e=>ts(e.touches[0].clientX,e.touches[0].clientY,e.target),P);
+document.addEventListener('touchmove',e=>tm(e.touches[0].clientX,e.touches[0].clientY),P);
+document.addEventListener('touchend',te);document.addEventListener('touchcancel',te);
+document.addEventListener('mousedown',e=>ts(e.clientX,e.clientY,e.target));
+document.addEventListener('mousemove',e=>{if(e.buttons)tm(e.clientX,e.clientY)});
+document.addEventListener('mouseup',te);
+document.addEventListener('click',e=>{AC.resume();if(e.target.closest('.pill'))vib(15)});
+
+rDev();rPly();rVoc();rSlp();rLg();
+</script></body></html>
